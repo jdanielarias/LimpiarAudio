@@ -1,0 +1,6 @@
+{
+  "_comment": "OPCIONAL. La app detecta sola la carpeta del proyecto cuando el ejecutable está dentro de ella (build in-repo o ZIP portable), así que normalmente NO necesitas este archivo. Solo hace falta si instalas la app en otra ubicación (p. ej. el instalador NSIS en Archivos de programa). En ese caso: copia este archivo a config.json y ajusta las rutas. Usa barras normales '/', NO invertidas. Alternativa: define las variables de entorno LIMPIARAUDIO_HOME y LIMPIARAUDIO_PYTHON.",
+  "home": "C:/ruta/a/LimpiarAudio",
+  "python": "C:/ruta/a/LimpiarAudio/.venv311/Scripts/python.exe",
+  "port": 8000
+}

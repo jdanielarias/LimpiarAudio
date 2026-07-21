@@ -1,0 +1,62 @@
+# ============================================================
+#  LimpiarAudio — .gitignore
+#  Se ignora todo lo pesado o regenerable: entornos, dependencias,
+#  modelos/pesos, datos de ejecución y artefactos de build.
+#  Se reconstruye con: setup.ps1 · setup-audiosep.ps1 · (desktop) npm install
+# ============================================================
+
+# --- Entornos de Python (los recrea setup.ps1 / setup-audiosep.ps1) ---
+.venv/
+.venv311/
+.venv-audiosep/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# --- Node / Electron (los recrea `npm install`; build pesado) ---
+desktop/node_modules/
+desktop/dist/
+
+# --- AudioSep: repo clonado (tiene su propio .git) + checkpoints ~4 GB ---
+#     Se obtiene con setup-audiosep.ps1. El worker propio vive en backend/.
+third_party/
+
+# --- Modelos / pesos pesados (red de seguridad; no se versionan) ---
+*.ckpt
+*.pth
+*.pt
+*.onnx
+*.safetensors
+*.bin
+
+# --- Datos de ejecución de la app (audios subidos, resultados, análisis) ---
+#     La carpeta se crea sola al arrancar el backend.
+storage/
+
+# --- Material de audio/vídeo propio o de prueba ---
+#     Quítalo de aquí si quieres versionar algún ejemplo pequeño a propósito.
+audio/
+*.wav
+*.mp3
+*.mp4
+*.mov
+*.m4a
+*.flac
+*.ogg
+
+# --- Artefactos temporales, logs y del sistema ---
+*.log
+*.tmp
+error.png
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Config local de la app de escritorio (rutas de ESTA máquina) ---
+#     Se versiona config.example.json; el config.json real es local.
+desktop/config.json
+
+# --- Editores / IDE ---
+.vscode/
+.idea/
+*.swp

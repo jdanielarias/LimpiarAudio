@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LimpiarAudio</title>
+  <script src="https://unpkg.com/wavesurfer.js@7"></script>
+  <style>
+    :root {
+      --bg: #0d1117; --panel: #161b22; --panel-2: #1c232d; --border: #2a333f;
+      --text: #e6edf3; --muted: #8b98a5; --accent: #3fb950; --accent-2: #58a6ff;
+      --danger: #f85149; --warn: #d29922; --radius: 14px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: radial-gradient(1200px 600px at 50% -10%, #16202b 0%, var(--bg) 60%);
+      color: var(--text); min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; padding: 40px 20px;
+    }
+    header { text-align: center; margin-bottom: 32px; }
+    header h1 { font-size: 2rem; letter-spacing: -0.5px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    header p { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+
+    .view { width: 100%; max-width: 820px; display: none; }
+    .view.active { display: block; animation: fade 0.25s ease; }
+    @keyframes fade { from { opacity: 0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+
+    /* selector de modo */
+    .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .mode-btn { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 40px 24px; cursor: pointer; text-align: center; color: var(--text);
+      transition: transform .15s, border-color .15s, background .15s; }
+    .mode-btn:hover { transform: translateY(-4px); border-color: var(--accent-2); background: var(--panel-2); }
+    .mode-btn.rapido:hover { border-color: var(--accent); }
+    .mode-btn .emoji { font-size: 3rem; display: block; margin-bottom: 14px; }
+    .mode-btn .name { display: block; font-size: 1.35rem; font-weight: 600; }
+    .mode-btn .desc { display: block; color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+
+    /* zona de trabajo */
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .back { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.95rem; }
+    .back:hover { color: var(--text); }
+    .badge { padding: 6px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 600; background: var(--panel-2); border: 1px solid var(--border); }
+
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; margin-bottom: 18px; }
+    .dropzone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 44px 24px; text-align: center;
+      color: var(--muted); cursor: pointer; background: var(--panel); transition: border-color .15s, background .15s; margin-bottom: 18px; }
+    .dropzone:hover, .dropzone.drag { border-color: var(--accent-2); background: var(--panel-2); color: var(--text); }
+    .dropzone .big { font-size: 2.4rem; margin-bottom: 10px; }
+    .dropzone strong { color: var(--accent-2); }
+    .dropzone .hint { font-size: 0.82rem; margin-top: 10px; }
+
+    .hidden { display: none !important; }
+    .filerow { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; gap: 12px; }
+    .filerow .fname { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .filerow .meta { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+    .wave { background: #0b0f14; border-radius: 10px; padding: 10px; min-height: 90px; }
+
+    .controls { display: flex; gap: 12px; align-items: center; margin-top: 14px; }
+    .btn { border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 11px 20px; border-radius: 10px;
+      cursor: pointer; font-size: 0.95rem; font-weight: 600; display: inline-flex; align-items: center; gap: 8px;
+      transition: background .15s, border-color .15s; text-decoration: none; }
+    .btn:hover { background: #26303b; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #04240c; }
+    .btn.primary:hover { filter: brightness(1.08); }
+    .btn.big { font-size: 1.1rem; padding: 15px 28px; width: 100%; justify-content: center; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .time { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.9rem; }
+
+    /* selector de calidad */
+    .quality-title { font-weight: 600; margin-bottom: 12px; }
+    .segmented { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .seg { border: 1px solid var(--border); background: var(--panel-2); border-radius: 10px; padding: 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+    .seg:hover { border-color: var(--accent-2); }
+    .seg.sel { border-color: var(--accent); background: #16261a; }
+    .seg .t { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .seg .d { color: var(--muted); font-size: 0.82rem; margin-top: 6px; }
+    .note { font-size: 0.83rem; color: var(--warn); background: rgba(210,153,34,.08); border: 1px solid rgba(210,153,34,.25);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 16px; display: none; }
+    .note.show { display: block; }
+    .gpu-pill { font-size: 0.75rem; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+
+    .status { margin-top: 14px; font-size: 0.9rem; min-height: 20px; }
+    .status.err { color: var(--danger); white-space: pre-wrap; }
+    .status.ok { color: var(--accent); }
+    .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--muted); border-top-color: var(--accent);
+      border-radius:50%; animation: spin .7s linear infinite; vertical-align:-2px; margin-right:6px; }
+    @keyframes spin { to { transform: rotate(360deg);} }
+
+    /* comparador A/B */
+    .ab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .ab-col .lbl { font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+    .ab-col .lbl.clean { color: var(--accent); }
+    .ab-col .play { width: 100%; justify-content: center; margin-top: 10px; }
+    .export-row { display: flex; gap: 12px; margin-top: 18px; }
+    .section-title { font-weight: 700; font-size: 1.05rem; margin-bottom: 14px; }
+
+    /* Modo Profesional: detección de sonidos (FASE 3) */
+    .analyze-status { font-size: 0.92rem; color: var(--muted); min-height: 20px; margin-bottom: 14px; }
+    .analyze-status.err { color: var(--danger); white-space: pre-wrap; }
+    .sound { border: 1px solid var(--border); background: var(--panel-2); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+    .sound .top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .sound .nm { font-weight: 600; font-size: 1.02rem; }
+    .sound .nm .en { color: var(--muted); font-weight: 400; font-size: 0.78rem; margin-left: 8px; }
+    .sound .pct { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 1.05rem; }
+    .bar { height: 8px; border-radius: 999px; background: #0b0f14; overflow: hidden; margin: 10px 0 8px; }
+    .bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+    .sound .sub { color: var(--muted); font-size: 0.82rem; margin-bottom: 8px; }
+    .segs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .seg-chip { font-size: 0.76rem; padding: 3px 9px; border-radius: 999px; background: #0b0f14; border: 1px solid var(--border); color: var(--text); font-variant-numeric: tabular-nums; }
+    .isolate-btn { margin-top: 12px; padding: 8px 14px; font-size: 0.85rem; }
+    .isolate-btn:disabled { opacity: .6; }
+    .tag-iso { font-size: 0.68rem; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+      color: var(--accent-2); border: 1px solid var(--accent-2); border-radius: 6px; padding: 1px 6px; margin-left: 8px; }
+    .pro-hint { color: var(--muted); font-size: 0.83rem; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+
+    /* FASE 4: separación de pistas */
+    .opt-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: var(--muted); font-size: 0.9rem; cursor: pointer; }
+    .opt-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+    .stem { display: grid; grid-template-columns: 26px 1fr 150px 52px 108px; align-items: center; gap: 12px;
+      border: 1px solid var(--border); background: var(--panel-2); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .stem.off { opacity: 0.5; }
+    .stem .chk { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+    .stem .snm { font-weight: 600; }
+    .stem .snm .en { color: var(--muted); font-weight: 400; font-size: 0.76rem; margin-left: 6px; }
+    .stem input[type=range] { width: 100%; accent-color: var(--accent-2); cursor: pointer; }
+    .stem .vol { font-variant-numeric: tabular-nums; text-align: right; color: var(--muted); font-size: 0.88rem; }
+    .stem .solo { padding: 7px 10px; font-size: 0.82rem; width: 100%; justify-content: center; }
+    .stem .solo.playing { background: var(--accent-2); border-color: var(--accent-2); color: #04121f; }
+    .mix-bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px; border-top: 1px solid var(--border); padding-top: 18px; }
+    .mix-note { font-size: 0.83rem; color: var(--muted); margin-top: 10px; min-height: 18px; }
+    .mix-note.warn { color: var(--warn); }
+    @media (max-width: 640px) {
+      .ab-grid, .segmented { grid-template-columns: 1fr; }
+      .stem { grid-template-columns: 22px 1fr 44px; grid-auto-rows: auto; }
+      .stem input[type=range] { grid-column: 1 / -1; }
+      .stem .solo { grid-column: 1 / -1; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎧 LimpiarAudio</h1>
+    <p>Limpia y mejora el audio de tus grabaciones y videos</p>
+  </header>
+
+  <!-- Vista 1: selector de modo -->
+  <section id="mode-view" class="view active">
+    <div class="modes">
+      <button class="mode-btn rapido" data-mode="rapido">
+        <span class="emoji">⚡</span><span class="name">Modo Rápido</span>
+        <span class="desc">Un clic y listo. Limpieza automática.</span>
+      </button>
+      <button class="mode-btn pro" data-mode="pro">
+        <span class="emoji">🎛️</span><span class="name">Modo Profesional</span>
+        <span class="desc">Control total sobre cada ajuste.</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Vista 2: trabajo -->
+  <section id="work-view" class="view">
+    <div class="toolbar">
+      <button class="back" id="back">← Cambiar modo</button>
+      <span class="badge" id="mode-badge">Modo</span>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <div class="big">📂</div>
+      <div>Arrastra tu archivo aquí o <strong>haz clic para elegir</strong></div>
+      <div class="hint">Audio o video: mp3, wav, m4a, mp4, mov</div>
+      <input type="file" id="fileinput" accept=".mp3,.wav,.m4a,.mp4,.mov" hidden />
+    </div>
+
+    <!-- Reproductor del archivo cargado -->
+    <div class="card hidden" id="loaded">
+      <div class="filerow">
+        <span class="fname" id="fname">—</span>
+        <span class="meta" id="fmeta"></span>
+      </div>
+      <div class="wave" id="waveform"></div>
+      <div class="controls">
+        <button class="btn" id="pp-orig" disabled>▶ Reproducir</button>
+        <span class="time" id="time-orig">0:00 / 0:00</span>
+      </div>
+    </div>
+
+    <!-- Panel de limpieza (solo Modo Rápido) -->
+    <div class="card hidden" id="clean-panel">
+      <div class="quality-title">Calidad de limpieza</div>
+      <div class="segmented" id="segmented">
+        <div class="seg sel" data-q="rapida">
+          <div class="t">⚡ Rápida</div>
+          <div class="d">DeepFilterNet. Veloz, funciona sin GPU.</div>
+        </div>
+        <div class="seg" data-q="alta">
+          <div class="t">💎 Alta calidad</div>
+          <div class="d">Resemble (denoiser fiel). Quita más ruido sin alterar la voz.</div>
+        </div>
+      </div>
+      <div class="note" id="alta-note">
+        💎 Denoiser fiel de Resemble: quita <b>más ruido sin alterar la voz</b> (no la regenera,
+        así que no suena robótica). Es <b>más lenta</b> que la rápida (varios minutos en CPU para
+        audios largos). <span class="gpu-pill" id="gpu-pill">comprobando hardware…</span>
+        <br>Límite de duración en alta calidad: 5 minutos.
+      </div>
+      <button class="btn primary big" id="clean-btn">✨ Limpiar audio</button>
+      <div class="status" id="clean-status"></div>
+    </div>
+
+    <!-- Modo Profesional: detección de sonidos (FASE 3) -->
+    <div class="card hidden" id="analyze-panel">
+      <div class="section-title">🔎 ¿Qué sonidos hay en este audio?</div>
+      <div class="analyze-status" id="analyze-status"></div>
+      <div id="sounds-list"></div>
+      <div class="mix-note" id="isolate-note"></div>
+    </div>
+
+    <!-- Modo Profesional: separar voz/diálogo del fondo (FASE 4) -->
+    <div class="card hidden" id="separate-panel">
+      <div class="section-title">🎚️ Separar voz y fondo, y mezclar</div>
+      <p class="pro-hint" style="margin-top:0;border:0;padding:0">
+        Separa el <b>diálogo</b> de la <b>música y el ambiente</b>. Ideal para documentales,
+        entrevistas y cine: sube la voz, baja el fondo, o expórtalos por separado.
+      </p>
+      <button class="btn primary big" id="separate-btn">🎛️ Separar voz y fondo</button>
+      <div class="status" id="separate-status"></div>
+
+      <!-- Filas de pistas (se rellenan tras separar) -->
+      <div id="stems"></div>
+
+      <!-- Controles de mezcla + export -->
+      <div class="mix-bar hidden" id="mix-bar">
+        <button class="btn" id="mix-play">▶ Escuchar mezcla</button>
+        <a class="btn primary" id="mix-wav" href="#">⬇ Exportar WAV</a>
+        <a class="btn" id="mix-mp3" href="#">⬇ Exportar MP3</a>
+      </div>
+      <div class="mix-note" id="mix-note"></div>
+    </div>
+
+    <!-- Comparador A/B + export -->
+    <div class="card hidden" id="ab-section">
+      <div class="section-title">🆚 Compara el resultado</div>
+      <div class="ab-grid">
+        <div class="ab-col">
+          <div class="lbl">🔈 Original</div>
+          <div class="wave" id="wave-a"></div>
+          <button class="btn play" id="pp-a" disabled>▶ Original</button>
+        </div>
+        <div class="ab-col">
+          <div class="lbl clean">✨ Limpio</div>
+          <div class="wave" id="wave-b"></div>
+          <button class="btn play" id="pp-b" disabled>▶ Limpio</button>
+        </div>
+      </div>
+      <div class="export-row">
+        <a class="btn primary" id="dl-wav" href="#">⬇ Exportar WAV</a>
+        <a class="btn" id="dl-mp3" href="#">⬇ Exportar MP3</a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let sessionId = null, currentMode = null, quality = "rapida";
+    let wsLoaded = null, wsA = null, wsB = null;
+    let previewAudio = null, previewKey = null;  // reproductor de pistas/mezcla (FASE 4)
+    let hwInfo = { cuda: false, audiosep_available: false };  // FASE 5
+    let lastSounds = [];  // últimos sonidos detectados (para el botón "Aislar")
+
+    // ---- info de hardware (GPU) + disponibilidad de AudioSep ----
+    fetch('/info').then(r => r.json()).then(d => {
+      hwInfo = d;
+      const pill = $('gpu-pill');
+      if (d.cuda) { pill.textContent = '✅ GPU detectada'; pill.style.color = 'var(--accent)'; }
+      else { pill.textContent = '🖥️ Sin GPU (usará CPU, será más lento)'; }
+    }).catch(() => {});
+
+    // ---- navegación ----
+    function showView(id) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      $(id).classList.add('active');
+    }
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentMode = btn.dataset.mode;
+        $('mode-badge').textContent = currentMode === 'rapido' ? '⚡ Modo Rápido' : '🎛️ Modo Profesional';
+        resetAll();
+        showView('work-view');
+      });
+    });
+    $('back').addEventListener('click', () => { resetAll(); showView('mode-view'); });
+
+    // ---- selector de calidad ----
+    document.querySelectorAll('.seg').forEach(seg => {
+      seg.addEventListener('click', () => {
+        document.querySelectorAll('.seg').forEach(s => s.classList.remove('sel'));
+        seg.classList.add('sel');
+        quality = seg.dataset.q;
+        $('alta-note').classList.toggle('show', quality === 'alta');
+      });
+    });
+
+    // ---- drag & drop ----
+    const dz = $('dropzone');
+    dz.addEventListener('click', () => $('fileinput').click());
+    $('fileinput').addEventListener('change', e => { if (e.target.files[0]) uploadFile(e.target.files[0]); });
+    ['dragenter','dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drag'); }));
+    ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
+    dz.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) uploadFile(f); });
+
+    // ---- helpers ----
+    function fmtTime(sec) { sec = Math.max(0, Math.floor(sec||0)); const m=Math.floor(sec/60), s=sec%60; return m+':'+String(s).padStart(2,'0'); }
+    function setCleanStatus(msg, cls='') { const s=$('clean-status'); s.className='status '+cls; s.innerHTML=msg; }
+
+    function destroyWave(ws) { if (ws) { try { ws.destroy(); } catch(e){} } return null; }
+    function resetAll() {
+      wsLoaded = destroyWave(wsLoaded); wsA = destroyWave(wsA); wsB = destroyWave(wsB);
+      sessionId = null;
+      $('loaded').classList.add('hidden');
+      $('clean-panel').classList.add('hidden');
+      $('analyze-panel').classList.add('hidden');
+      $('sounds-list').innerHTML = '';
+      $('analyze-status').className = 'analyze-status';
+      $('analyze-status').innerHTML = '';
+      $('isolate-note').className = 'mix-note'; $('isolate-note').textContent = '';
+      lastSounds = [];
+      // FASE 4: separación / mezcla
+      if (previewAudio) { previewAudio.pause(); previewKey = null; }
+      $('separate-panel').classList.add('hidden');
+      $('stems').innerHTML = '';
+      $('mix-bar').classList.add('hidden');
+      $('separate-status').className = 'status'; $('separate-status').innerHTML = '';
+      $('mix-note').className = 'mix-note'; $('mix-note').textContent = '';
+      $('ab-section').classList.add('hidden');
+      setCleanStatus('');
+      $('pp-orig').disabled = true; $('pp-orig').textContent = '▶ Reproducir';
+      $('time-orig').textContent = '0:00 / 0:00';
+    }
+
+    function makePlayer(container, url, ppBtn, timeEl, label) {
+      const ws = WaveSurfer.create({
+        container, url,
+        waveColor: label === 'clean' ? '#2f6f45' : '#3d4b5a',
+        progressColor: label === 'clean' ? '#3fb950' : '#58a6ff',
+        cursorColor: '#e6edf3', height: 84, barWidth: 2, barGap: 1, barRadius: 2,
+      });
+      ws.on('ready', () => { ppBtn.disabled = false; if (timeEl) timeEl.textContent = '0:00 / ' + fmtTime(ws.getDuration()); });
+      ws.on('play',  () => ppBtn.textContent = ppBtn.textContent.replace('▶','⏸'));
+      ws.on('pause', () => ppBtn.textContent = ppBtn.textContent.replace('⏸','▶'));
+      ws.on('finish',() => ppBtn.textContent = ppBtn.textContent.replace('⏸','▶'));
+      if (timeEl) ws.on('timeupdate', t => timeEl.textContent = fmtTime(t) + ' / ' + fmtTime(ws.getDuration()));
+      return ws;
+    }
+
+    // ---- subida ----
+    async function uploadFile(file) {
+      resetAll();
+      $('loaded').classList.remove('hidden');
+      $('fname').textContent = file.name;
+      $('fmeta').textContent = 'subiendo…';
+      const fd = new FormData(); fd.append('file', file);
+      try {
+        const res = await fetch('/upload', { method:'POST', body: fd });
+        if (!res.ok) { const e = await res.json().catch(()=>({detail:res.statusText})); throw new Error(e.detail||'Error'); }
+        const data = await res.json();
+        sessionId = data.id;
+        $('fmeta').textContent = `${fmtTime(data.duration)} · ${data.sample_rate/1000}kHz · estéreo`;
+        wsLoaded = makePlayer('#waveform', '/audio/'+sessionId, $('pp-orig'), $('time-orig'), 'orig');
+        $('pp-orig').onclick = () => wsLoaded.playPause();
+
+        if (currentMode === 'rapido') {
+          $('clean-panel').classList.remove('hidden');
+        } else {
+          $('analyze-panel').classList.remove('hidden');
+          $('separate-panel').classList.remove('hidden');
+          analyzeSounds();  // Modo Profesional: detecta qué sonidos hay
+        }
+      } catch (e) {
+        $('fmeta').textContent = '';
+        $('loaded').classList.add('hidden');
+        alert('No se pudo subir: ' + e.message);
+      }
+    }
+
+    // ---- limpiar ----
+    $('clean-btn').addEventListener('click', async () => {
+      if (!sessionId) return;
+      const btn = $('clean-btn'); btn.disabled = true;
+      const started = Date.now();
+      const slow = quality === 'alta';
+      let timer = setInterval(() => {
+        const s = Math.floor((Date.now()-started)/1000);
+        setCleanStatus(`<span class="spinner"></span> Procesando (${quality})… ${s}s`
+          + (slow ? ' — la alta calidad puede tardar varios minutos' : ''));
+      }, 500);
+      try {
+        const fd = new FormData(); fd.append('quality', quality);
+        const res = await fetch('/clean/'+sessionId, { method:'POST', body: fd });
+        clearInterval(timer);
+        if (!res.ok) { const e = await res.json().catch(()=>({detail:res.statusText})); throw new Error(e.detail||'Error'); }
+        const data = await res.json();
+        setCleanStatus(`✅ Listo con <b>${data.engine}</b> en ${data.proc_seconds}s (${data.device.toUpperCase()}).`, 'ok');
+        showAB();
+      } catch (e) {
+        clearInterval(timer);
+        setCleanStatus('❌ ' + e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ---- Modo Profesional: detección de sonidos ----
+    async function analyzeSounds() {
+      if (!sessionId) return;
+      const statusEl = $('analyze-status'), list = $('sounds-list');
+      list.innerHTML = '';
+      const started = Date.now();
+      const timer = setInterval(() => {
+        const s = Math.floor((Date.now() - started) / 1000);
+        statusEl.className = 'analyze-status';
+        statusEl.innerHTML = `<span class="spinner"></span> Analizando los sonidos del audio… ${s}s`;
+      }, 300);
+      try {
+        const res = await fetch('/analyze/' + sessionId, { method: 'POST' });
+        clearInterval(timer);
+        if (!res.ok) { const e = await res.json().catch(() => ({ detail: res.statusText })); throw new Error(e.detail || 'Error'); }
+        renderSounds(await res.json());
+      } catch (e) {
+        clearInterval(timer);
+        statusEl.className = 'analyze-status err';
+        statusEl.textContent = '❌ ' + e.message;
+      }
+    }
+
+    function renderSounds(data) {
+      const statusEl = $('analyze-status'), list = $('sounds-list');
+      statusEl.className = 'analyze-status';
+      lastSounds = data.sounds || [];
+      if (!lastSounds.length) {
+        statusEl.textContent = 'No se detectaron sonidos destacados en este audio.';
+        return;
+      }
+      statusEl.innerHTML = `✅ <b>${lastSounds.length}</b> sonidos detectados · analizado en `
+        + `${data.proc_seconds}s con <b>PANNs Cnn14 (AudioSet)</b>.`;
+      list.innerHTML = lastSounds.map((s, i) => {
+        const pct = Math.round(s.confidence * 100);
+        const presence = Math.round(s.presence * 100);
+        const en = s.label_es !== s.label ? `<span class="en">${s.label}</span>` : '';
+        const chips = s.segments.map(g =>
+          `<span class="seg-chip">${fmtTime(g.start)}–${fmtTime(g.end)}</span>`).join('');
+        return `<div class="sound">
+          <div class="top"><div class="nm">${s.label_es}${en}</div><div class="pct">${pct}%</div></div>
+          <div class="bar"><span style="width:${pct}%"></span></div>
+          <div class="sub">Presente el <b>${presence}%</b> del tiempo${s.segments.length ? ' · aparece en:' : ''}</div>
+          <div class="segs">${chips}</div>
+          <button class="btn isolate-btn" data-i="${i}">✂️ Aislar este sonido</button>
+        </div>`;
+      }).join('');
+      // Botones "Aislar" (FASE 5)
+      list.querySelectorAll('.isolate-btn').forEach(btn => {
+        btn.addEventListener('click', () => isolateSound(+btn.dataset.i, btn));
+      });
+      // Nota sobre disponibilidad / hardware
+      const note = $('isolate-note');
+      if (!hwInfo.audiosep_available) {
+        note.className = 'mix-note warn';
+        note.innerHTML = '⚠️ El aislamiento por IA (AudioSep) no está disponible en este equipo. '
+          + 'Puedes usar el modo <b>Google Colab</b> (ver <code>notebooks/AudioSep_LimpiarAudio.ipynb</code>).';
+      } else if (!hwInfo.cuda) {
+        note.className = 'mix-note';
+        note.innerHTML = '💡 «Aislar» usa IA (AudioSep). <b>Sin GPU</b> tarda ~1 s por cada 2 s de '
+          + 'audio más la carga del modelo (varios minutos en audios largos; máx. 15 min). '
+          + 'Con GPU (Colab) es mucho más rápido.';
+      } else {
+        note.className = 'mix-note'; note.textContent = '';
+      }
+    }
+
+    // FASE 5: aísla el sonido i de la lista y lo añade como pista al mezclador
+    async function isolateSound(i, btn) {
+      if (!sessionId || !lastSounds[i]) return;
+      const s = lastSounds[i];
+      if (!hwInfo.audiosep_available) { alert('AudioSep no está disponible aquí. Usa el modo Google Colab.'); return; }
+      const orig = btn.innerHTML;
+      btn.disabled = true;
+      const started = Date.now();
+      const timer = setInterval(() => {
+        const t = Math.floor((Date.now() - started) / 1000);
+        btn.innerHTML = `<span class="spinner"></span> Aislando «${s.label_es}»… ${t}s`;
+      }, 300);
+      try {
+        const fd = new FormData();
+        fd.append('query', s.label);       // descripción EN INGLÉS para AudioSep
+        fd.append('label', s.label_es);     // nombre a mostrar
+        const res = await fetch('/isolate/' + sessionId, { method: 'POST', body: fd });
+        clearInterval(timer);
+        if (!res.ok) { const e = await res.json().catch(() => ({ detail: res.statusText })); throw new Error(e.detail || 'Error'); }
+        const data = await res.json();
+        btn.innerHTML = `✅ Aislado (${data.proc_seconds}s) — añadido a las pistas`;
+        addIsolatedStem(data.stem);
+      } catch (e) {
+        clearInterval(timer);
+        btn.disabled = false; btn.innerHTML = orig;
+        alert('No se pudo aislar: ' + e.message);
+      }
+    }
+
+    // ---- Modo Profesional: separación de pistas + mezcla (FASE 4) ----
+    previewAudio = new Audio();
+    previewAudio.addEventListener('ended', clearPreviewUI);
+
+    function clearPreviewUI() {
+      document.querySelectorAll('.stem .solo.playing').forEach(b => {
+        b.classList.remove('playing'); b.textContent = '▶ Sola';
+      });
+      $('mix-play').textContent = '▶ Escuchar mezcla';
+      previewKey = null;
+    }
+
+    function playPreview(url, key, onStart) {
+      if (previewKey === key && !previewAudio.paused) {  // mismo → alterna a pausa
+        previewAudio.pause(); clearPreviewUI(); return;
+      }
+      previewAudio.pause(); clearPreviewUI();
+      previewAudio.src = url; previewKey = key;
+      previewAudio.play().then(() => onStart && onStart()).catch(() => {});
+    }
+
+    // Separar en pistas
+    $('separate-btn').addEventListener('click', async () => {
+      if (!sessionId) return;
+      const btn = $('separate-btn'), st = $('separate-status');
+      btn.disabled = true;
+      const started = Date.now();
+      const timer = setInterval(() => {
+        const s = Math.floor((Date.now() - started) / 1000);
+        st.className = 'status';
+        st.innerHTML = `<span class="spinner"></span> Separando voz y fondo… ${s}s`
+          + ' — puede tardar (Demucs en CPU).';
+      }, 400);
+      try {
+        const res = await fetch('/separate/' + sessionId, { method: 'POST' });
+        clearInterval(timer);
+        if (!res.ok) { const e = await res.json().catch(() => ({ detail: res.statusText })); throw new Error(e.detail || 'Error'); }
+        const data = await res.json();
+        st.className = 'status ok';
+        st.innerHTML = `✅ Voz y fondo separados en ${data.proc_seconds}s (${data.device.toUpperCase()}).`;
+        renderStems(data);
+      } catch (e) {
+        clearInterval(timer);
+        st.className = 'status err'; st.textContent = '❌ ' + e.message;
+      } finally { btn.disabled = false; }
+    });
+
+    function stemRowHTML(s, isolated) {
+      const sub = isolated
+        ? `<span class="en">IA · «${s.query || s.label_es}»</span><span class="tag-iso">aislado</span>`
+        : (s.label_es !== s.name ? `<span class="en">${s.name}</span>` : '');
+      return `<div class="stem" data-stem="${s.name}">
+        <input type="checkbox" class="chk" checked>
+        <div class="snm">${s.label_es}${sub}</div>
+        <input type="range" min="0" max="200" value="100" step="5">
+        <div class="vol">100%</div>
+        <button class="btn solo">▶ Sola</button>
+      </div>`;
+    }
+
+    function wireStemRow(row) {
+      const name = row.dataset.stem;
+      const chk = row.querySelector('.chk');
+      const rng = row.querySelector('input[type=range]');
+      const vol = row.querySelector('.vol');
+      const solo = row.querySelector('.solo');
+      chk.addEventListener('change', () => row.classList.toggle('off', !chk.checked));
+      rng.addEventListener('input', () => vol.textContent = rng.value + '%');
+      solo.addEventListener('click', () => {
+        playPreview('/stem/' + sessionId + '/' + name, 'stem:' + name, () => {
+          solo.classList.add('playing'); solo.textContent = '⏸ Sola';
+        });
+      });
+    }
+
+    function showMixArea() {
+      $('separate-panel').classList.remove('hidden');
+      $('mix-bar').classList.remove('hidden');
+      $('mix-note').className = 'mix-note';
+      $('mix-note').textContent = 'Ajusta cada pista y pulsa «Escuchar mezcla» o «Exportar».';
+    }
+
+    function renderStems(data) {
+      clearPreviewUI();
+      const box = $('stems');
+      box.innerHTML = data.stems.map(s => stemRowHTML(s, false)).join('');
+      box.querySelectorAll('.stem').forEach(wireStemRow);
+      showMixArea();
+    }
+
+    // FASE 5: añade (o reemplaza) una pista aislada al mezclador
+    function addIsolatedStem(stem) {
+      const box = $('stems');
+      const existing = box.querySelector(`.stem[data-stem="${stem.name}"]`);
+      if (existing) existing.remove();
+      box.insertAdjacentHTML('beforeend', stemRowHTML(stem, true));
+      wireStemRow(box.lastElementChild);
+      showMixArea();
+      box.lastElementChild.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function collectTracks() {
+      return [...document.querySelectorAll('#stems .stem')].map(row => ({
+        name: row.dataset.stem,
+        enabled: row.querySelector('.chk').checked,
+        gain: (+row.querySelector('input[type=range]').value) / 100,
+      }));
+    }
+
+    async function mixNow() {
+      const res = await fetch('/mix/' + sessionId, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tracks: collectTracks() }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({ detail: res.statusText })); throw new Error(e.detail || 'Error'); }
+      return res.json();
+    }
+
+    function showMixNote(r, extra) {
+      const note = $('mix-note');
+      note.className = 'mix-note' + (r && r.clipped ? ' warn' : '');
+      const warn = r && r.clipped
+        ? '⚠️ La mezcla satura (pico > 100%). Baja algún volumen para evitar distorsión. ' : '';
+      note.innerHTML = warn + (extra || (r ? `Mezcla lista (pico ${Math.round(r.peak * 100)}%).` : ''));
+    }
+
+    // Escuchar mezcla
+    $('mix-play').addEventListener('click', async () => {
+      if (!sessionId) return;
+      if (previewKey === 'mix' && !previewAudio.paused) { previewAudio.pause(); clearPreviewUI(); return; }
+      const note = $('mix-note');
+      try {
+        note.className = 'mix-note'; note.innerHTML = '<span class="spinner"></span> Preparando mezcla…';
+        const r = await mixNow();
+        showMixNote(r);
+        playPreview('/mix-audio/' + sessionId + '?t=' + Date.now(), 'mix',
+          () => $('mix-play').textContent = '⏸ Escuchar mezcla');
+      } catch (e) { note.className = 'mix-note warn'; note.textContent = '❌ ' + e.message; }
+    });
+
+    // Exportar (WAV / MP3): re-mezcla con el estado actual y descarga
+    ['wav', 'mp3'].forEach(fmt => {
+      $('mix-' + fmt).addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        if (!sessionId) return;
+        const note = $('mix-note');
+        try {
+          note.className = 'mix-note';
+          note.innerHTML = `<span class="spinner"></span> Preparando ${fmt.toUpperCase()}…`;
+          const r = await mixNow();
+          const a = document.createElement('a');
+          a.href = '/export-mix/' + sessionId + '?format=' + fmt + '&t=' + Date.now();
+          a.download = 'mezcla.' + fmt;
+          document.body.appendChild(a); a.click(); a.remove();
+          showMixNote(r, `Descargando <b>mezcla.${fmt}</b>…`);
+        } catch (e) { note.className = 'mix-note warn'; note.textContent = '❌ ' + e.message; }
+      });
+    });
+
+    // ---- comparador A/B ----
+    function showAB() {
+      $('ab-section').classList.remove('hidden');
+      wsA = destroyWave(wsA); wsB = destroyWave(wsB);
+      const bust = '?t=' + Date.now();  // evita caché del audio limpio anterior
+      wsA = makePlayer('#wave-a', '/audio/'+sessionId, $('pp-a'), null, 'orig');
+      wsB = makePlayer('#wave-b', '/clean-audio/'+sessionId + bust, $('pp-b'), null, 'clean');
+      $('pp-a').textContent = '▶ Original'; $('pp-b').textContent = '▶ Limpio';
+      $('pp-a').onclick = () => { if (wsB) wsB.pause(); wsA.playPause(); };
+      $('pp-b').onclick = () => { if (wsA) wsA.pause(); wsB.playPause(); };
+
+      $('dl-wav').href = '/download/'+sessionId+'?format=wav';
+      $('dl-wav').setAttribute('download', 'limpio.wav');
+      $('dl-mp3').href = '/download/'+sessionId+'?format=mp3';
+      $('dl-mp3').setAttribute('download', 'limpio.mp3');
+      $('ab-section').scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+  </script>
+</body>
+</html>

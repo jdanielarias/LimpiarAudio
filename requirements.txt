@@ -1,0 +1,46 @@
+# LimpiarAudio — dependencias del backend (Python 3.11)
+# NOTA: la instalación no es un simple `pip install -r` por dos motivos:
+#   1) torch/torchaudio/torchvision van desde el índice CPU de PyTorch.
+#   2) resemble-enhance se instala con --no-deps (deepspeed se sustituye por un
+#      stub en el código; no compila en Windows y solo se usa en entrenamiento).
+# Usa  setup.ps1  para reproducir el entorno completo de forma fiable.
+
+# --- PyTorch (índice CPU: https://download.pytorch.org/whl/cpu) ---
+torch==2.1.2
+torchaudio==2.1.2
+torchvision==0.16.2
+
+# --- Motores de limpieza ---
+deepfilternet            # calidad "rápida"
+resemble-enhance         # calidad "alta"  (instalar con --no-deps)
+soundfile
+
+# --- Dependencias de runtime de resemble-enhance (sin deepspeed) ---
+librosa==0.10.1
+omegaconf
+pandas
+matplotlib
+celluloid
+ptflops
+rich
+scipy
+resampy
+tabulate
+tqdm
+
+# --- Detección de sonidos (FASE 3, Modo Profesional) ---
+panns-inference          # PANNs: modelo Cnn14 entrenado en AudioSet (527 clases)
+# NOTA: el CSV de etiquetas y el checkpoint Cnn14 (~330 MB) se descargan a
+# ~/panns_data. panns-inference los baja con `wget`, que no existe en Windows;
+# por eso setup.ps1 los descarga con Python (urllib).
+
+# --- Separación de pistas (FASE 4, Modo Profesional) ---
+demucs                   # htdemucs / htdemucs_6s (voz, batería, bajo, otros, +piano/guitarra)
+# Los pesos se descargan solos a la caché de huggingface_hub en el 1er uso
+# (torch.hub/HF, sí funciona en Windows; no depende de wget).
+
+# --- API web ---
+fastapi
+uvicorn[standard]
+python-multipart
+imageio-ffmpeg
